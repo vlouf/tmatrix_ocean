@@ -161,17 +161,17 @@ def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atte
                         'ATTEN_SPEC_V': (('time'), atten_spec_v)})
 
     dset.diameter.attrs['units'] = "mm"
-    dset.dbz.attrs['units'] = "dBZ"
-    dset.zdr.attrs['units'] = "dB"
-    dset.kdp.attrs['units'] = "deg/km"
-    dset.atten_spec.attrs['units'] = "dB/km"
-    dset.atten_spec_v.attrs['units'] = "dB/km"
+    dset.DBZ.attrs['units'] = "dBZ"
+    dset.ZDR.attrs['units'] = "dB"
+    dset.KDP.attrs['units'] = "deg/km"
+    dset.ATTEN_SPEC.attrs['units'] = "dB/km"
+    dset.ATTEN_SPEC_V.attrs['units'] = "dB/km"
 
-    dset.dbz.attrs["description"] = "Horizontal reflectivity"
-    dset.zdr.attrs["description"] = "Differential reflectivity"
-    dset.kdp.attrs["description"] = "Specific differential phase "
-    dset.atten_spec.attrs["description"] = "Specific attenuation for the horizontal reflectivity"
-    dset.atten_spec_v.attrs["description"] = "Specific attenuation for the vertical reflectivity"
+    dset.DBZ.attrs["description"] = "Horizontal reflectivity"
+    dset.ZDR.attrs["description"] = "Differential reflectivity"
+    dset.KDP.attrs["description"] = "Specific differential phase "
+    dset.ATTEN_SPEC.attrs["description"] = "Specific attenuation for the horizontal reflectivity"
+    dset.ATTEN_SPEC_V.attrs["description"] = "Specific attenuation for the vertical reflectivity"
 
     dset.to_netcdf(outfilename)
 
@@ -193,7 +193,7 @@ def main():
         # Generating output file name:
         outfile = os.path.basename(input_file)
         outfile = outfile.replace(".txt", ".nc")
-        outfile = outfile.replace("_psd", "_PSD_TMATRIX_{}-band".format(letter_band))
+        outfile = outfile.replace("_psd", f"_PSD_TMATRIX_{letter_band}-band")
         outfilename = os.path.join(OUTDIR, outfile)
 
         # Check if output file exists.
@@ -211,11 +211,16 @@ def main():
         with ProgressBar():
             rslt = bag.compute()        
         dbz, zdr, kdp, atten_spec, atten_spec_v = zip(*rslt)
+        dbz = np.array(dbz)
+        zdr = np.array(zdr)
+        kdp = np.array(kdp)
+        atten_spec = np.array(atten_spec)
+        atten_spec_v = np.array(atten_spec_v)
         print("T-Matrix computation finished.")
 
-        time = disdro_data["date"]
+        time = np.array(disdro_data['date'], dtype='datetime64')
         print("The output file will be {}.".format(outfilename))
-        write_netcdf(outfilename, time, diameter_bin_size, disdro_data, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v)
+        write_netcdf(outfilename, time, diameter_bin_size, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v)
         print("Output file {} written.".format(outfilename))
 
     return None
