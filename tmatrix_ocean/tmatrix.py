@@ -10,6 +10,7 @@ from dask.diagnostics import ProgressBar
 # Other packages
 import netCDF4
 import numpy as np
+import xarray as xr
 from scipy import interpolate
 
 import pytmatrix
@@ -126,51 +127,53 @@ def scatter_off_2dvd_packed(d_diameters, d_densities):
     return dbz, zdr, kdp, atten_spec, atten_spec_v
 
 
-def write_netcdf(outfilename, time, diameter_bin_size, disdro_data, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v):
-    # Write netCDF4 file.
-    with netCDF4.Dataset(outfilename, "w", format="NETCDF4") as rootgrp:
-        # Create dimension
-        rootgrp.createDimension("time", len(time))
-        rootgrp.createDimension("diameter", len(diameter_bin_size))
+def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v):
+    '''
+    Write output netCDF dataset.
 
-        # Create variable for these dimensions.
-        nctime = rootgrp.createVariable('time', 'f8', 'time')
-        ncdiam = rootgrp.createVariable('diameter', 'f8', 'diameter')
+    Parameters:
+    ===========
+    outfilename: str
+    time: ndarray
+        time
+    diameter: ndarray
+        diameter
+    PSD_raw_count: ndarray
+        Concentration number
+    dbz: ndarray
+        Reflectivity
+    zdr: ndarray
+        Differential reflectivity
+    kdp: ndarray
+        Specific differential phase
+    atten_spec: ndarray
+        Specific attenuation
+    atten_spec_v: ndarray
+        Vertical specific attenuation 
+    '''
+    dset = xr.Dataset({'time': (('time'), time),
+                        'diameter': (('diameter'), diameter),
+                        'concentration_number': (("time", "diameter"), PSD_raw_count),
+                        'DBZ': (('time'), dbz),
+                        'ZDR': (('time'), zdr),
+                        'KDP': (('time'), kdp),
+                        'ATTEN_SPEC': (('time'), atten_spec),
+                        'ATTEN_SPEC_V': (('time'), atten_spec_v)})
 
-        # Populating these variables.
-        nctime[:] = date2num(time, TIME_UNIT)
-        nctime.units = TIME_UNIT
-        ncdiam[:] = diameter_bin_size
-        ncdiam.units = "mm"
+    dset.diameter.attrs['units'] = "mm"
+    dset.dbz.attrs['units'] = "dBZ"
+    dset.zdr.attrs['units'] = "dB"
+    dset.kdp.attrs['units'] = "deg/km"
+    dset.atten_spec.attrs['units'] = "dB/km"
+    dset.atten_spec_v.attrs['units'] = "dB/km"
 
-        # PSD count
-        ncpsd = rootgrp.createVariable("concentration_number", 'f8', ("time", "diameter"), zlib=True)
-        ncpsd[:] = PSD_raw_count
+    dset.dbz.attrs["description"] = "Horizontal reflectivity"
+    dset.zdr.attrs["description"] = "Differential reflectivity"
+    dset.kdp.attrs["description"] = "Specific differential phase "
+    dset.atten_spec.attrs["description"] = "Specific attenuation for the horizontal reflectivity"
+    dset.atten_spec_v.attrs["description"] = "Specific attenuation for the vertical reflectivity"
 
-        # T-Matrix results:
-        ncdbz = rootgrp.createVariable("DBZ", "f8", ("time",), zlib=True)
-        nczdr = rootgrp.createVariable("ZDR", "f8", ("time",), zlib=True)
-        nckdp = rootgrp.createVariable("KDP", "f8", ("time",), zlib=True)
-        ncatten_spec = rootgrp.createVariable("ATTEN_SPEC", "f8", ("time",), zlib=True)
-        ncatten_spec_v = rootgrp.createVariable("ATTEN_SPEC_V", "f8", ("time",), zlib=True)
-
-        ncdbz[:] = dbz
-        nczdr[:] = zdr
-        nckdp[:] = kdp
-        ncatten_spec[:] = atten_spec
-        ncatten_spec_v[:] = atten_spec_v
-
-        ncdbz.units = "dBZ"
-        nczdr.units = "dB"
-        nckdp.units = "deg/km"
-        ncatten_spec.units = "dB/km"
-        ncatten_spec_v.units = "dB/km"
-
-        ncdbz.setncattr_string("description", "Horizontal reflectivity")
-        nczdr.setncattr_string("description", "Differential reflectivity")
-        nckdp.setncattr_string("description", "Specific differential phase ")
-        ncatten_spec.setncattr_string("description", "Specific attenuation for the horizontal reflectivity")
-        ncatten_spec_v.setncattr_string("description", "Specific attenuation for the vertical reflectivity")
+    dset.to_netcdf(outfilename)
 
     return None
 
