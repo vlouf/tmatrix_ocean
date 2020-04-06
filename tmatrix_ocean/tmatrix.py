@@ -37,9 +37,21 @@ def drop_axis_ratio(D_eq):
     if D_eq < 0.7:
         axratio = 1.0  # Spherical
     elif D_eq < 1.5:
-        axratio = 1.173 - 0.5165 * D_eq + 0.4698 * D_eq**2 - 0.1317 * D_eq**3 - 8.5e-3 * D_eq**4
+        axratio = (
+            1.173
+            - 0.5165 * D_eq
+            + 0.4698 * D_eq ** 2
+            - 0.1317 * D_eq ** 3
+            - 8.5e-3 * D_eq ** 4
+        )
     else:
-        axratio = 1.065 - 6.25e-2 * D_eq - 3.99e-3 * D_eq**2 + 7.66e-4 * D_eq**3 - 4.095e-5 * D_eq**4
+        axratio = (
+            1.065
+            - 6.25e-2 * D_eq
+            - 3.99e-3 * D_eq ** 2
+            + 7.66e-4 * D_eq ** 3
+            - 4.095e-5 * D_eq ** 4
+        )
 
     return 1.0 / axratio
 
@@ -51,7 +63,9 @@ def buffer(d_diameters, d_densities):
         raise IndexError("Not the same dim")
 
     try:
-        dbz, zdr, kdp, atten_spec, atten_spec_v = scatter_off_2dvd_packed(d_diameters, d_densities)
+        dbz, zdr, kdp, atten_spec, atten_spec_v = scatter_off_2dvd_packed(
+            d_diameters, d_densities
+        )
     except Exception:
         raise
 
@@ -111,7 +125,9 @@ def scatter_off_2dvd_packed(d_diameters, d_densities):
         Specific attenuation (dB/km).
     """
     # Function interpolation.
-    mypds = interpolate.interp1d(d_diameters, d_densities, bounds_error=False, fill_value=0.0)
+    mypds = interpolate.interp1d(
+        d_diameters, d_densities, bounds_error=False, fill_value=0.0
+    )
     SCATTERER.psd = mypds  # GammaPSD(D0=2.0, Nw=1e3, mu=4)
 
     # Obtaining reflectivity and ZDR.
@@ -127,8 +143,10 @@ def scatter_off_2dvd_packed(d_diameters, d_densities):
     return dbz, zdr, kdp, atten_spec, atten_spec_v
 
 
-def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v):
-    '''
+def write_netcdf(
+    outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v
+):
+    """
     Write output netCDF dataset.
 
     Parameters:
@@ -150,28 +168,36 @@ def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atte
         Specific attenuation
     atten_spec_v: ndarray
         Vertical specific attenuation
-    '''
-    dset = xr.Dataset({'time': (('time'), time),
-                        'diameter': (('diameter'), diameter),
-                        'concentration_number': (("time", "diameter"), PSD_raw_count),
-                        'DBZ': (('time'), dbz),
-                        'ZDR': (('time'), zdr),
-                        'KDP': (('time'), kdp),
-                        'ATTEN_SPEC': (('time'), atten_spec),
-                        'ATTEN_SPEC_V': (('time'), atten_spec_v)})
+    """
+    dset = xr.Dataset(
+        {
+            "time": (("time"), time),
+            "diameter": (("diameter"), diameter),
+            "concentration_number": (("time", "diameter"), PSD_raw_count),
+            "DBZ": (("time"), dbz),
+            "ZDR": (("time"), zdr),
+            "KDP": (("time"), kdp),
+            "ATTEN_SPEC": (("time"), atten_spec),
+            "ATTEN_SPEC_V": (("time"), atten_spec_v),
+        }
+    )
 
-    dset.diameter.attrs['units'] = "mm"
-    dset.DBZ.attrs['units'] = "dBZ"
-    dset.ZDR.attrs['units'] = "dB"
-    dset.KDP.attrs['units'] = "deg/km"
-    dset.ATTEN_SPEC.attrs['units'] = "dB/km"
-    dset.ATTEN_SPEC_V.attrs['units'] = "dB/km"
+    dset.diameter.attrs["units"] = "mm"
+    dset.DBZ.attrs["units"] = "dBZ"
+    dset.ZDR.attrs["units"] = "dB"
+    dset.KDP.attrs["units"] = "deg/km"
+    dset.ATTEN_SPEC.attrs["units"] = "dB/km"
+    dset.ATTEN_SPEC_V.attrs["units"] = "dB/km"
 
     dset.DBZ.attrs["description"] = "Horizontal reflectivity"
     dset.ZDR.attrs["description"] = "Differential reflectivity"
     dset.KDP.attrs["description"] = "Specific differential phase "
-    dset.ATTEN_SPEC.attrs["description"] = "Specific attenuation for the horizontal reflectivity"
-    dset.ATTEN_SPEC_V.attrs["description"] = "Specific attenuation for the vertical reflectivity"
+    dset.ATTEN_SPEC.attrs[
+        "description"
+    ] = "Specific attenuation for the horizontal reflectivity"
+    dset.ATTEN_SPEC_V.attrs[
+        "description"
+    ] = "Specific attenuation for the vertical reflectivity"
 
     dset.to_netcdf(outfilename)
 
@@ -181,7 +207,9 @@ def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atte
 def main(input_file, freq_band):
     letter_band = radar_band_name(freq_band)
     outfile = os.path.basename(input_file)
-    outfile = outfile.replace("_psd", f"_PSD_TMATRIX_{letter_band}-band").replace(".txt", ".nc")
+    outfile = outfile.replace("_psd", f"_PSD_TMATRIX_{letter_band}-band").replace(
+        ".txt", ".nc"
+    )
     outfilename = os.path.join(OUTDIR, outfile)
     if os.path.exists(outfilename):
         print("Output file already exists. Doing nothing.")
@@ -192,7 +220,10 @@ def main(input_file, freq_band):
     print("input file {} read.".format(input_file))
 
     # Build argument list for multiprocessing.
-    myargs = [(diameter_bin_size, PSD_raw_count[cnt, :]) for cnt in range(0, len(PSD_raw_count))]
+    myargs = [
+        (diameter_bin_size, PSD_raw_count[cnt, :])
+        for cnt in range(0, len(PSD_raw_count))
+    ]
     bag = db.from_sequence(myargs).starmap(buffer)
     with ProgressBar():
         rslt = bag.compute()
@@ -204,34 +235,48 @@ def main(input_file, freq_band):
     atten_spec_v = np.array(atten_spec_v)
     print("T-Matrix computation finished.")
 
-    time = np.array(disdro_data['date'], dtype='datetime64')
+    time = np.array(disdro_data["date"], dtype="datetime64")
     print("The output file will be {}.".format(outfilename))
-    write_netcdf(outfilename, time, diameter_bin_size, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v)
+    write_netcdf(
+        outfilename,
+        time,
+        diameter_bin_size,
+        PSD_raw_count,
+        dbz,
+        zdr,
+        kdp,
+        atten_spec,
+        atten_spec_v,
+    )
     print("Output file {} written.".format(outfilename))
 
     return None
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     TIME_UNIT = "seconds since 1970-01-01 00:00"
     OUTDIR = "."
 
     # Radar band in mm.
     flist = glob.glob("/g/data/kl02/vhl548/data_for_others/disdro2/*psd_na.txt")
     for infile in flist:
-        for RADAR_BAND in [tmatrix_aux.wl_S,
-                        tmatrix_aux.wl_C,
-                        tmatrix_aux.wl_X,
-                        tmatrix_aux.wl_Ku,
-                        tmatrix_aux.wl_Ka,
-                        tmatrix_aux.wl_W]:
+        for RADAR_BAND in [
+            tmatrix_aux.wl_S,
+            tmatrix_aux.wl_C,
+            tmatrix_aux.wl_X,
+            tmatrix_aux.wl_Ku,
+            tmatrix_aux.wl_Ka,
+            tmatrix_aux.wl_W]:
 
             print("Looking at wavelength {} mm.".format(RADAR_BAND))
             SCATTERER = Scatterer(wavelength=RADAR_BAND, m=refractive.m_w_10C[RADAR_BAND])
             SCATTERER.psd_integrator = PSDIntegrator()
             SCATTERER.psd_integrator.axis_ratio_func = lambda D: drop_axis_ratio(D)
             SCATTERER.psd_integrator.D_max = 8
-            SCATTERER.psd_integrator.geometries = (tmatrix_aux.geom_horiz_back, tmatrix_aux.geom_horiz_forw)
+            SCATTERER.psd_integrator.geometries = (
+                tmatrix_aux.geom_horiz_back,
+                tmatrix_aux.geom_horiz_forw,
+            )
             SCATTERER.or_pdf = orientation.gaussian_pdf(10.0)
             SCATTERER.orient = orientation.orient_averaged_fixed
             SCATTERER.psd_integrator.init_scatter_table(SCATTERER)
