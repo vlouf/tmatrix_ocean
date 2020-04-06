@@ -44,7 +44,7 @@ def drop_axis_ratio(D_eq):
     return 1.0 / axratio
 
 
-def multi_proc_manager(d_diameters, d_densities):
+def buffer(d_diameters, d_densities):
 
     if len(d_diameters) != len(d_densities):
         print(len(d_diameters), len(d_densities))
@@ -149,7 +149,7 @@ def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atte
     atten_spec: ndarray
         Specific attenuation
     atten_spec_v: ndarray
-        Vertical specific attenuation 
+        Vertical specific attenuation
     '''
     dset = xr.Dataset({'time': (('time'), time),
                         'diameter': (('diameter'), diameter),
@@ -178,50 +178,36 @@ def write_netcdf(outfilename, time, diameter, PSD_raw_count, dbz, zdr, kdp, atte
     return None
 
 
-def main():
-    # List all input files.
-    flist = glob.glob("/g/data/kl02/vhl548/data_for_others/disdro2/*psd_na.txt")
-#     flist = ['/g/data/kl02/vhl548/data_for_others/disdro2/joint_sonne2DISDRO_SO257-SO267_psd_na.txt']
-    if len(flist) == 0:
-        print("No file found.")
+def main(input_file, freq_band):
+    letter_band = radar_band_name(freq_band)
+    outfile = os.path.basename(input_file)
+    outfile = outfile.replace("_psd", f"_PSD_TMATRIX_{letter_band}-band").replace(".txt", ".nc")
+    outfilename = os.path.join(OUTDIR, outfile)
+    if os.path.exists(outfilename):
+        print("Output file already exists. Doing nothing.")
         return None
 
-    # Getting radar for generating output file name.
-    letter_band = radar_band_name(RADAR_BAND)
+    # Read data.
+    diameter_bin_size, disdro_data, PSD_raw_count = read_ascii_file(input_file)
+    print("input file {} read.".format(input_file))
 
-    for input_file in flist:
-        # Generating output file name:
-        outfile = os.path.basename(input_file)
-        outfile = outfile.replace(".txt", ".nc")
-        outfile = outfile.replace("_psd", f"_PSD_TMATRIX_{letter_band}-band")
-        outfilename = os.path.join(OUTDIR, outfile)
+    # Build argument list for multiprocessing.
+    myargs = [(diameter_bin_size, PSD_raw_count[cnt, :]) for cnt in range(0, len(PSD_raw_count))]
+    bag = db.from_sequence(myargs).starmap(buffer)
+    with ProgressBar():
+        rslt = bag.compute()
+    dbz, zdr, kdp, atten_spec, atten_spec_v = zip(*rslt)
+    dbz = np.array(dbz)
+    zdr = np.array(zdr)
+    kdp = np.array(kdp)
+    atten_spec = np.array(atten_spec)
+    atten_spec_v = np.array(atten_spec_v)
+    print("T-Matrix computation finished.")
 
-        # Check if output file exists.
-        if os.path.exists(outfilename):
-            print("Output file already exists. Doing nothing.")
-            continue
-
-        # Read data.
-        diameter_bin_size, disdro_data, PSD_raw_count = read_ascii_file(input_file)
-        print("input file {} read.".format(input_file))
-
-        # Build argument list for multiprocessing.
-        myargs = [(diameter_bin_size, PSD_raw_count[cnt, :]) for cnt in range(0, len(PSD_raw_count))]
-        bag = db.from_sequence(myargs).starmap(multi_proc_manager)
-        with ProgressBar():
-            rslt = bag.compute()        
-        dbz, zdr, kdp, atten_spec, atten_spec_v = zip(*rslt)
-        dbz = np.array(dbz)
-        zdr = np.array(zdr)
-        kdp = np.array(kdp)
-        atten_spec = np.array(atten_spec)
-        atten_spec_v = np.array(atten_spec_v)
-        print("T-Matrix computation finished.")
-
-        time = np.array(disdro_data['date'], dtype='datetime64')
-        print("The output file will be {}.".format(outfilename))
-        write_netcdf(outfilename, time, diameter_bin_size, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v)
-        print("Output file {} written.".format(outfilename))
+    time = np.array(disdro_data['date'], dtype='datetime64')
+    print("The output file will be {}.".format(outfilename))
+    write_netcdf(outfilename, time, diameter_bin_size, PSD_raw_count, dbz, zdr, kdp, atten_spec, atten_spec_v)
+    print("Output file {} written.".format(outfilename))
 
     return None
 
@@ -231,21 +217,23 @@ if __name__ == '__main__':
     OUTDIR = "."
 
     # Radar band in mm.
-    for RADAR_BAND in [tmatrix_aux.wl_S,
-                       tmatrix_aux.wl_C,
-                       tmatrix_aux.wl_X,
-                       tmatrix_aux.wl_Ku,
-                       tmatrix_aux.wl_Ka,
-                       tmatrix_aux.wl_W]:
+    flist = glob.glob("/g/data/kl02/vhl548/data_for_others/disdro2/*psd_na.txt")
+    for infile in flist:
+        for RADAR_BAND in [tmatrix_aux.wl_S,
+                        tmatrix_aux.wl_C,
+                        tmatrix_aux.wl_X,
+                        tmatrix_aux.wl_Ku,
+                        tmatrix_aux.wl_Ka,
+                        tmatrix_aux.wl_W]:
 
-        print("Looking at wavelength {} mm.".format(RADAR_BAND))        
-        SCATTERER = Scatterer(wavelength=RADAR_BAND, m=refractive.m_w_10C[RADAR_BAND])        
-        SCATTERER.psd_integrator = PSDIntegrator()
-        SCATTERER.psd_integrator.axis_ratio_func = lambda D: drop_axis_ratio(D)
-        SCATTERER.psd_integrator.D_max = 8
-        SCATTERER.psd_integrator.geometries = (tmatrix_aux.geom_horiz_back, tmatrix_aux.geom_horiz_forw)
-        SCATTERER.or_pdf = orientation.gaussian_pdf(10.0)
-        SCATTERER.orient = orientation.orient_averaged_fixed
-        SCATTERER.psd_integrator.init_scatter_table(SCATTERER)
+            print("Looking at wavelength {} mm.".format(RADAR_BAND))
+            SCATTERER = Scatterer(wavelength=RADAR_BAND, m=refractive.m_w_10C[RADAR_BAND])
+            SCATTERER.psd_integrator = PSDIntegrator()
+            SCATTERER.psd_integrator.axis_ratio_func = lambda D: drop_axis_ratio(D)
+            SCATTERER.psd_integrator.D_max = 8
+            SCATTERER.psd_integrator.geometries = (tmatrix_aux.geom_horiz_back, tmatrix_aux.geom_horiz_forw)
+            SCATTERER.or_pdf = orientation.gaussian_pdf(10.0)
+            SCATTERER.orient = orientation.orient_averaged_fixed
+            SCATTERER.psd_integrator.init_scatter_table(SCATTERER)
 
-        main()
+            main(infile, RADAR_BAND)
